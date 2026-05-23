@@ -63,49 +63,6 @@ locals {
   }
 }
 
-resource "terraform_data" "configure_autoscaler" {
-  count = length(var.autoscaler_nodepools) > 0 ? 1 : 0
-
-  triggers_replace = {
-    template = local.autoscaler_yaml
-  }
-  connection {
-    user           = "root"
-    private_key    = var.ssh_private_key
-    agent_identity = local.ssh_agent_identity
-    host           = local.first_control_plane_ip
-    port           = var.ssh_port
-
-    bastion_host        = local.ssh_bastion.bastion_host
-    bastion_port        = local.ssh_bastion.bastion_port
-    bastion_user        = local.ssh_bastion.bastion_user
-    bastion_private_key = local.ssh_bastion.bastion_private_key
-
-  }
-
-  # Upload the autoscaler resource defintion
-  provisioner "file" {
-    content     = local.autoscaler_yaml
-    destination = "/tmp/autoscaler.yaml"
-  }
-
-  # Create/Apply the definition
-  provisioner "remote-exec" {
-    inline = ["kubectl apply -f /tmp/autoscaler.yaml"]
-  }
-
-  depends_on = [
-    hcloud_load_balancer.cluster,
-    terraform_data.control_planes,
-    random_password.rancher_bootstrap,
-    hcloud_volume.longhorn_volume,
-    data.hcloud_image.microos_x86_snapshot
-  ]
-}
-moved {
-  from = null_resource.configure_autoscaler
-  to   = terraform_data.configure_autoscaler
-}
 
 data "cloudinit_config" "autoscaler_config" {
   count = length(var.autoscaler_nodepools)
