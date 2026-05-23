@@ -138,6 +138,12 @@ output "autoscaler_image_arm64" {
   description = "MicroOS ARM snapshot ID used by autoscaler nodes."
 }
 
+output "autoscaler_cloud_init_b64gzip" {
+  value       = length(var.autoscaler_nodepools) > 0 ? data.cloudinit_config.autoscaler_config[0].rendered : ""
+  description = "Gzip+base64 cloud-init for autoscaler nodes (all pools are identical). Use for HCLOUD_CLOUD_INIT."
+  sensitive   = true
+}
+
 output "cilium_values" {
   description = "Helm values.yaml used for Cilium"
   value       = local.cilium_values
