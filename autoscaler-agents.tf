@@ -13,15 +13,15 @@ locals {
   # cloudInit is identical for all pools (same MicroOS bootstrap script). Embedding it
   # per-pool duplicates ~12KB × N pools and pushes HCLOUD_CLUSTER_CONFIG past Linux's
   # MAX_ARG_STRLEN (128KB) when N > ~8. Instead: store cloudInit once in HCLOUD_CLOUD_INIT
-  # and omit it from each nodeConfig (the autoscaler falls back to HCLOUD_CLOUD_INIT).
+  # and omit the key from each nodeConfig entirely (absent key falls back to HCLOUD_CLOUD_INIT;
+  # an empty string "" does NOT fall back — it overrides with no cloud-init).
   cluster_config = {
     imagesForArch : local.imageList
     nodeConfigs : {
       for index, nodePool in var.autoscaler_nodepools :
       ("${local.nodeConfigName}${nodePool.name}") => {
-        cloudInit = ""
-        labels    = nodePool.labels
-        taints    = nodePool.taints
+        labels = nodePool.labels
+        taints = nodePool.taints
       }
     }
   }
@@ -32,7 +32,7 @@ locals {
     "${path.module}/templates/autoscaler.yaml.tpl",
     {
       # Always populate HCLOUD_CLOUD_INIT with the shared cloud-init (first pool's config).
-      # Per-pool cloudInit in HCLOUD_CLUSTER_CONFIG is empty; autoscaler falls back to this.
+      # Per-pool cloudInit omitted from HCLOUD_CLUSTER_CONFIG; autoscaler falls back to this.
       cloudinit_config                           = length(var.autoscaler_nodepools) > 0 ? data.cloudinit_config.autoscaler_config[0].rendered : (local.isUsingLegacyConfig ? base64encode(data.cloudinit_config.autoscaler_legacy_config[0].rendered) : "")
       ca_image                                   = var.cluster_autoscaler_image
       ca_version                                 = var.cluster_autoscaler_version
