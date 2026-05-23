@@ -117,6 +117,27 @@ output "kubeconfig_data" {
   sensitive   = true
 }
 
+output "firewall_id" {
+  value       = hcloud_firewall.k3s.id
+  description = "The ID of the HCloud firewall used by cluster nodes."
+}
+
+output "autoscaler_node_configs_raw" {
+  value       = length(var.autoscaler_nodepools) > 0 ? local.autoscaler_node_configs_raw : {}
+  description = "Per-pool nodeConfig map with raw cloud-init text for the autoscaler Secret."
+  sensitive   = true
+}
+
+output "autoscaler_image_x86" {
+  value       = data.hcloud_image.microos_x86_snapshot.id
+  description = "MicroOS x86 snapshot ID used by autoscaler nodes."
+}
+
+output "autoscaler_image_arm64" {
+  value       = data.hcloud_image.microos_arm_snapshot.id
+  description = "MicroOS ARM snapshot ID used by autoscaler nodes."
+}
+
 output "cilium_values" {
   description = "Helm values.yaml used for Cilium"
   value       = local.cilium_values

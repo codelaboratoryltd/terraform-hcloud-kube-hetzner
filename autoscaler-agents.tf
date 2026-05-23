@@ -196,6 +196,60 @@ data "cloudinit_config" "autoscaler_legacy_config" {
   }
 }
 
+data "cloudinit_config" "autoscaler_config_raw" {
+  count = length(var.autoscaler_nodepools)
+
+  gzip          = false
+  base64_encode = false
+
+  part {
+    filename     = "init.cfg"
+    content_type = "text/cloud-config"
+    content = templatefile(
+      "${path.module}/templates/autoscaler-cloudinit.yaml.tpl",
+      {
+        hostname          = "autoscaler"
+        dns_servers       = var.dns_servers
+        has_dns_servers   = local.has_dns_servers
+        sshAuthorizedKeys = concat([var.ssh_public_key], var.ssh_additional_public_keys)
+        swap_size         = var.autoscaler_nodepools[count.index].swap_size
+        zram_size         = var.autoscaler_nodepools[count.index].zram_size
+        k3s_config = yamlencode(merge(
+          {
+            server        = local.k3s_endpoint
+            token         = local.k3s_token
+            kubelet-arg   = concat(local.kubelet_arg, var.autoscaler_nodepools[count.index].kubelet_args, var.k3s_global_kubelet_args, var.k3s_autoscaler_kubelet_args)
+            flannel-iface = local.flannel_iface
+            node-label    = concat(local.default_agent_labels, [for k, v in var.autoscaler_nodepools[count.index].labels : "${k}=${v}"], var.autoscaler_nodepools[count.index].swap_size != "" || var.autoscaler_nodepools[count.index].zram_size != "" ? local.swap_node_label : [])
+            node-taint    = compact(concat(local.default_agent_taints, [for taint in var.autoscaler_nodepools[count.index].taints : "${taint.key}=${tostring(taint.value)}:${taint.effect}"]))
+            selinux       = !var.disable_selinux
+          },
+          var.agent_nodes_custom_config,
+          local.prefer_bundled_bin_config
+        ))
+        install_k3s_agent_script     = join("\n", concat(local.install_k3s_agent, ["systemctl start k3s-agent"]))
+        cloudinit_write_files_common = local.cloudinit_write_files_common
+        cloudinit_runcmd_common      = local.cloudinit_runcmd_common
+        private_network_only         = var.autoscaler_disable_ipv4 && var.autoscaler_disable_ipv6
+        network_gw_ipv4              = local.network_gw_ipv4
+        enable_dualstack             = local.enable_dualstack
+        flannel_iface                = local.flannel_iface
+      }
+    )
+  }
+}
+
+locals {
+  autoscaler_node_configs_raw = {
+    for index, nodePool in var.autoscaler_nodepools :
+    ("${local.nodeConfigName}${nodePool.name}") => {
+      cloudInit = data.cloudinit_config.autoscaler_config_raw[index].rendered
+      labels    = nodePool.labels
+      taints    = nodePool.taints
+    }
+  }
+}
+
 data "hcloud_servers" "autoscaled_nodes" {
   for_each      = toset(var.autoscaler_nodepools[*].name)
   with_selector = "hcloud/node-group=${local.cluster_prefix}${each.value}"
