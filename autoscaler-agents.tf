@@ -213,7 +213,12 @@ data "hcloud_servers" "autoscaled_nodes" {
 }
 
 resource "terraform_data" "autoscaled_nodes_registries" {
-  for_each = local.autoscaled_nodes
+  # Skip the SSH-based registries provisioner when no registry config is set.
+  # The default value of var.k3s_registries is " " (a single space) which would
+  # otherwise pointlessly push an empty file to every autoscaled node — and
+  # break the apply entirely when SSH is firewalled off (e.g. when access is
+  # via a Cloudflare Zero Trust tunnel only).
+  for_each = trimspace(var.k3s_registries) == "" ? {} : local.autoscaled_nodes
   triggers_replace = {
     registries = var.k3s_registries
   }
