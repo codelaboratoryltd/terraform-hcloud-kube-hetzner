@@ -226,6 +226,29 @@ variable "nat_router_subnet_index" {
   }
 }
 
+variable "nat_router_disable_public_ips_on_nodes" {
+  type        = bool
+  default     = true
+  description = <<-EOT
+    When `nat_router` is set, this controls whether the module forces
+    disable_ipv4 = true and disable_ipv6 = true on every control plane,
+    agent, and autoscaler node (i.e. the atomic "all cluster egress
+    now goes via the NAT router" behaviour).
+
+    Default `true` preserves prior behaviour: enabling nat_router
+    implicitly makes every cluster node IPv6-only.
+
+    Set to `false` when you want to introduce a NAT router into an
+    existing cluster without simultaneously ripping public IPs off
+    every existing node — the additive rollout pattern, where you
+    provision NAT hot, verify it works, then flip individual nodepools
+    to `disable_ipv4 = true` one at a time (and set the autoscaler-wide
+    `autoscaler_disable_ipv4 = true` on its own timeline).
+
+    Only meaningful when `nat_router != null`.
+  EOT
+}
+
 variable "vswitch_subnet_index" {
   type        = number
   default     = 201

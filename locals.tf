@@ -274,8 +274,8 @@ locals {
         selinux : nodepool_obj.selinux
         placement_group_compat_idx : nodepool_obj.placement_group_compat_idx,
         placement_group : nodepool_obj.placement_group,
-        disable_ipv4 : nodepool_obj.disable_ipv4 || local.use_nat_router,
-        disable_ipv6 : nodepool_obj.disable_ipv6 || local.use_nat_router,
+        disable_ipv4 : nodepool_obj.disable_ipv4 || local.force_disable_public_ips_on_nodes,
+        disable_ipv6 : nodepool_obj.disable_ipv6 || local.force_disable_public_ips_on_nodes,
         network_id : nodepool_obj.network_id,
       }
     }
@@ -303,8 +303,8 @@ locals {
         selinux : nodepool_obj.selinux
         placement_group_compat_idx : nodepool_obj.placement_group_compat_idx,
         placement_group : nodepool_obj.placement_group,
-        disable_ipv4 : nodepool_obj.disable_ipv4 || local.use_nat_router,
-        disable_ipv6 : nodepool_obj.disable_ipv6 || local.use_nat_router,
+        disable_ipv4 : nodepool_obj.disable_ipv4 || local.force_disable_public_ips_on_nodes,
+        disable_ipv6 : nodepool_obj.disable_ipv6 || local.force_disable_public_ips_on_nodes,
         network_id : nodepool_obj.network_id,
       }
     }
@@ -333,8 +333,8 @@ locals {
           placement_group_compat_idx : nodepool_obj.placement_group_compat_idx,
           placement_group : nodepool_obj.placement_group,
           index : floor(tonumber(node_key)),
-          disable_ipv4 : nodepool_obj.disable_ipv4 || local.use_nat_router,
-          disable_ipv6 : nodepool_obj.disable_ipv6 || local.use_nat_router,
+          disable_ipv4 : nodepool_obj.disable_ipv4 || local.force_disable_public_ips_on_nodes,
+          disable_ipv6 : nodepool_obj.disable_ipv6 || local.force_disable_public_ips_on_nodes,
           network_id : nodepool_obj.network_id,
         },
         { for key, value in node_obj : key => value if value != null },
@@ -359,7 +359,19 @@ locals {
 
   use_nat_router = var.nat_router != null
 
-  ssh_bastion = local.use_nat_router ? {
+  # When true, the NAT router's presence cascades to every nodepool as an
+  # implicit `disable_ipv4 = true` / `disable_ipv6 = true`. When false,
+  # NAT provisioning is additive — existing nodes keep their public IPs
+  # until you set `disable_ipv4` explicitly per nodepool. Gated by
+  # `var.nat_router_disable_public_ips_on_nodes` (default true = old
+  # behaviour). Only meaningful when use_nat_router is true.
+  force_disable_public_ips_on_nodes = local.use_nat_router && var.nat_router_disable_public_ips_on_nodes
+
+  # SSH via NAT bastion is only necessary once nodes no longer have public IPs.
+  # While `force_disable_public_ips_on_nodes` is false, existing nodes are still
+  # publicly SSH-able directly, so gate the bastion switch on the same flag.
+  # This keeps the additive-NAT rollout from also forcing a bastion cutover.
+  ssh_bastion = local.force_disable_public_ips_on_nodes ? {
     bastion_host        = hcloud_server.nat_router[0].ipv4_address
     bastion_port        = var.ssh_port
     bastion_user        = "nat-router"
