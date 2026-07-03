@@ -188,6 +188,18 @@ locals {
         "  echo \"Info: Unable to identify interface that reaches ${local.network_gw_ipv4}; skipping private default route setup.\"",
         "fi",
         "",
+        "# IPv6-only-node fix: drop any non-private interface's IPv4 default",
+        "# route when it holds a CGNAT (100.64/10) address — Hetzner CGNAT",
+        "# can't SNAT to the general internet, so the private→NAT route wins.",
+        "for I in $(ls /sys/class/net); do",
+        "  [ \"$I\" = \"lo\" ] || [ \"$I\" = \"$PRIV_IF\" ] && continue",
+        "  V=$(ip -4 -o addr show dev \"$I\" 2>/dev/null|awk '{print $4}'|head -n1|cut -d/ -f1)",
+        "  echo \"$V\"|grep -qE '^100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.' || continue",
+        "  ip -4 route del default dev \"$I\" 2>/dev/null || true",
+        "  C=$(nmcli -g GENERAL.CONNECTION device show \"$I\" 2>/dev/null|head -n1)",
+        "  [ -n \"$C\" ] && nmcli connection modify \"$C\" ipv4.never-default yes >/dev/null 2>&1 && nmcli connection up \"$C\" >/dev/null 2>&1 || true",
+        "done",
+        "",
         "set -e"
       ])
     ],
