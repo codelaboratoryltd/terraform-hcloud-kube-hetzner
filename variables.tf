@@ -249,6 +249,29 @@ variable "nat_router_disable_public_ips_on_nodes" {
   EOT
 }
 
+variable "nat_router_ssh_bastion" {
+  type        = bool
+  nullable    = true
+  default     = null
+  description = <<-EOT
+    Override for whether SSH provisioners route through the NAT router
+    as a bastion host. When `null` (default), tracks
+    `nat_router_disable_public_ips_on_nodes` — the classic behaviour
+    where flipping the whole cluster IPv6-only also flips SSH via NAT.
+
+    Set explicitly to `true` during an additive per-pool rollout to use
+    the NAT router as a bastion (so terraform's SSH provisioners can
+    reach freshly-provisioned IPv6-only nodes' private IPs) without
+    also triggering the cascade that would strip public IPs from every
+    other pool.
+
+    Set explicitly to `false` to keep direct SSH even after the cascade
+    flag is on.
+
+    Only meaningful when `nat_router != null`.
+  EOT
+}
+
 variable "vswitch_subnet_index" {
   type        = number
   default     = 201

@@ -379,11 +379,13 @@ locals {
   # behaviour). Only meaningful when use_nat_router is true.
   force_disable_public_ips_on_nodes = local.use_nat_router && var.nat_router_disable_public_ips_on_nodes
 
-  # SSH via NAT bastion is only necessary once nodes no longer have public IPs.
-  # While `force_disable_public_ips_on_nodes` is false, existing nodes are still
-  # publicly SSH-able directly, so gate the bastion switch on the same flag.
-  # This keeps the additive-NAT rollout from also forcing a bastion cutover.
-  ssh_bastion = local.force_disable_public_ips_on_nodes ? {
+  # SSH via NAT bastion. Independent of the cascade flag so an operator
+  # doing per-pool IPv6-only migration can route terraform's SSH
+  # provisioners through the NAT while the other pools still have
+  # public IPs. Falls through to the cascade flag when not overridden.
+  use_ssh_bastion = local.use_nat_router && coalesce(var.nat_router_ssh_bastion, var.nat_router_disable_public_ips_on_nodes)
+
+  ssh_bastion = local.use_ssh_bastion ? {
     bastion_host        = hcloud_server.nat_router[0].ipv4_address
     bastion_port        = var.ssh_port
     bastion_user        = "nat-router"
