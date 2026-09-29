@@ -97,7 +97,7 @@ data "cloudinit_config" "autoscaler_config" {
           var.agent_nodes_custom_config,
           local.prefer_bundled_bin_config
         ))
-        install_k3s_agent_script     = join("\n", concat(local.install_k3s_agent, ["systemctl start k3s-agent"]))
+        install_k3s_agent_script     = join("\n", concat(local.install_k3s_autoscaler_agent, ["systemctl start k3s-agent"]))
         cloudinit_write_files_common = local.cloudinit_write_files_common
         cloudinit_runcmd_common      = local.cloudinit_runcmd_common,
         private_network_only         = var.autoscaler_disable_ipv4,
@@ -141,7 +141,7 @@ data "cloudinit_config" "autoscaler_legacy_config" {
           var.agent_nodes_custom_config,
           local.prefer_bundled_bin_config
         ))
-        install_k3s_agent_script     = join("\n", concat(local.install_k3s_agent, ["systemctl start k3s-agent"]))
+        install_k3s_agent_script     = join("\n", concat(local.install_k3s_autoscaler_agent, ["systemctl start k3s-agent"]))
         cloudinit_write_files_common = local.cloudinit_write_files_common
         cloudinit_runcmd_common      = local.cloudinit_runcmd_common,
         private_network_only         = var.autoscaler_disable_ipv4,
@@ -184,7 +184,7 @@ data "cloudinit_config" "autoscaler_config_raw" {
           var.agent_nodes_custom_config,
           local.prefer_bundled_bin_config
         ))
-        install_k3s_agent_script     = join("\n", concat(local.install_k3s_agent, ["systemctl start k3s-agent"]))
+        install_k3s_agent_script     = join("\n", concat(local.install_k3s_autoscaler_agent, ["systemctl start k3s-agent"]))
         cloudinit_write_files_common = local.cloudinit_write_files_common
         cloudinit_runcmd_common      = local.cloudinit_runcmd_common
         private_network_only         = var.autoscaler_disable_ipv4 && var.autoscaler_disable_ipv6
