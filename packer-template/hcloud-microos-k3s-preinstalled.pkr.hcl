@@ -6,15 +6,22 @@
  * It starts from a snapshot rather than from the upstream qcow2 on purpose:
  * hcloud-microos-snapshots.pkr.hcl pulls whatever Tumbleweed is current, so a
  * rebuild would also change the OS and kernel under every new node. This
- * template changes nothing but the two k3s files.
+ * template adds only the two k3s files, plus the incidental state of one boot
+ * (a cloud-init instance dir, logs, leases) that each node's first boot
+ * supersedes anyway.
+ *
+ * The checksums pin against corruption and silent re-tagging; the binary's
+ * sha256 comes from the same GitHub release, so this is trust-on-first-use,
+ * not signature verification.
  *
  * Usage:
  *   HCLOUD_TOKEN=... packer init  hcloud-microos-k3s-preinstalled.pkr.hcl
  *   HCLOUD_TOKEN=... packer build -var base_snapshot_id=<id> hcloud-microos-k3s-preinstalled.pkr.hcl
  *
- * The result keeps the microos-snapshot=yes label, so it becomes the
- * most_recent x86 image the module selects. Static nodes ignore image changes
- * (lifecycle.ignore_changes); only newly created servers use it. x86 only.
+ * The result is labelled k3s-preinstalled, which is how the module picks the
+ * autoscaler image when autoscaler_k3s_preinstalled is set. It also keeps
+ * microos-snapshot=yes, so new static nodes may boot it too; they still run
+ * the download path, which is harmless. x86 only: ARM pools keep downloading.
  */
 packer {
   required_plugins {
