@@ -129,7 +129,7 @@ output "autoscaler_node_configs_raw" {
 }
 
 output "autoscaler_image_x86" {
-  value       = data.hcloud_image.microos_x86_snapshot.id
+  value       = local.autoscaler_x86_snapshot_id
   description = "MicroOS x86 snapshot ID used by autoscaler nodes."
 }
 

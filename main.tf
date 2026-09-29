@@ -9,6 +9,17 @@ data "hcloud_image" "microos_x86_snapshot" {
   most_recent       = true
 }
 
+# With autoscaler_k3s_preinstalled, autoscaled x86 nodes must boot a snapshot
+# that carries /opt/k3s/install.sh. Select it by its own label instead of
+# "newest microos-snapshot": otherwise rebuilding a plain snapshot later would
+# silently become the autoscaler image, and every new node would fail to join.
+data "hcloud_image" "microos_x86_k3s_snapshot" {
+  count             = var.autoscaler_k3s_preinstalled ? 1 : 0
+  with_selector     = "microos-snapshot=yes,k3s-preinstalled"
+  with_architecture = "x86"
+  most_recent       = true
+}
+
 data "hcloud_image" "microos_arm_snapshot" {
   with_selector     = "microos-snapshot=yes"
   with_architecture = "arm"

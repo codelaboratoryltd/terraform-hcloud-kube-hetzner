@@ -255,6 +255,26 @@ locals {
 
   k3s_install_command = "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_SELINUX_RPM=true %{if var.install_k3s_version == ""}INSTALL_K3S_CHANNEL=${var.initial_k3s_channel}%{else}INSTALL_K3S_VERSION=${var.install_k3s_version}%{endif} INSTALL_K3S_EXEC='%s' sh -"
 
+  # With var.autoscaler_k3s_preinstalled, autoscaled nodes boot from a snapshot
+  # that already carries the k3s binary and install.sh
+  # (packer-template/hcloud-microos-k3s-preinstalled.pkr.hcl), so the install
+  # step fetches nothing from get.k3s.io or GitHub (container images still come
+  # from registries at join). Without it every scale-up depends on both:
+  # on 2026-09-29 get.k3s.io returned HTTP 500 for hours (k3s-io/k3s#14717) and
+  # every autoscaled server booted but never registered.
+  k3s_preinstalled_install_command = "INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_SELINUX_RPM=true INSTALL_K3S_EXEC='%s' sh /opt/k3s/install.sh"
+
+  # Only x86 snapshots are built with k3s pre-installed, so ARM (cax*) pools
+  # keep the download path even with the flag on.
+  install_k3s_autoscaler_agent = {
+    for preinstalled in [true, false] : tostring(preinstalled) => concat(
+      local.common_pre_install_k3s_commands,
+      [format(preinstalled ? local.k3s_preinstalled_install_command : local.k3s_install_command, "agent ${var.k3s_exec_agent_args}")],
+      var.disable_selinux ? [] : local.apply_k3s_selinux,
+      local.common_post_install_k3s_commands
+    )
+  }
+
   install_k3s_server = concat(
     local.common_pre_install_k3s_commands,
     [format(local.k3s_install_command, "server ${var.k3s_exec_server_args}")],

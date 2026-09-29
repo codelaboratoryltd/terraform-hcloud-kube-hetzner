@@ -1563,6 +1563,12 @@ variable "k3s_exec_agent_args" {
   description = "Agents nodes are started with `k3s agent {k3s_exec_agent_args}`. Use this to add kubelet-arg for example."
 }
 
+variable "autoscaler_k3s_preinstalled" {
+  type        = bool
+  default     = false
+  description = "Install k3s on autoscaled nodes from the binary and install.sh baked into the snapshot (packer-template/hcloud-microos-k3s-preinstalled.pkr.hcl) instead of downloading them from get.k3s.io and GitHub at boot. The x86 snapshot must be built with that template first; the ARM snapshot is not covered."
+}
+
 variable "k3s_prefer_bundled_bin" {
   type        = bool
   default     = false
