@@ -20,6 +20,14 @@ data "hcloud_image" "microos_x86_k3s_snapshot" {
   most_recent       = true
 }
 
+# The ARM counterpart, for autoscaler_k3s_preinstalled_arm (packer -var arch=arm).
+data "hcloud_image" "microos_arm_k3s_snapshot" {
+  count             = var.autoscaler_k3s_preinstalled_arm ? 1 : 0
+  with_selector     = "microos-snapshot=yes,k3s-preinstalled"
+  with_architecture = "arm"
+  most_recent       = true
+}
+
 data "hcloud_image" "microos_arm_snapshot" {
   with_selector     = "microos-snapshot=yes"
   with_architecture = "arm"

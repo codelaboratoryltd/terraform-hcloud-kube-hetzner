@@ -1566,7 +1566,13 @@ variable "k3s_exec_agent_args" {
 variable "autoscaler_k3s_preinstalled" {
   type        = bool
   default     = false
-  description = "Install k3s on autoscaled nodes from the binary and install.sh baked into the snapshot (packer-template/hcloud-microos-k3s-preinstalled.pkr.hcl) instead of downloading them from get.k3s.io and GitHub at boot. The x86 snapshot must be built with that template first; the ARM snapshot is not covered."
+  description = "Install k3s on autoscaled nodes from the binary and install.sh baked into the snapshot (packer-template/hcloud-microos-k3s-preinstalled.pkr.hcl) instead of downloading them from get.k3s.io and GitHub at boot. Applies to x86 pools; the x86 snapshot must be built with that template first. ARM (cax*) pools are governed by autoscaler_k3s_preinstalled_arm."
+}
+
+variable "autoscaler_k3s_preinstalled_arm" {
+  type        = bool
+  default     = false
+  description = "As autoscaler_k3s_preinstalled, for ARM (cax*) autoscaler pools. Build the ARM snapshot first with `packer build -var arch=arm` on the same template; until then plan fails to find a k3s-preinstalled ARM image."
 }
 
 variable "k3s_prefer_bundled_bin" {

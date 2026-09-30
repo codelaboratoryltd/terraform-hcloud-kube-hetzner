@@ -14,14 +14,16 @@
  * sha256 comes from the same GitHub release, so this is trust-on-first-use,
  * not signature verification.
  *
- * Usage:
+ * Usage (x86 is the default; pass -var arch=arm for the ARM snapshot):
  *   HCLOUD_TOKEN=... packer init  hcloud-microos-k3s-preinstalled.pkr.hcl
- *   HCLOUD_TOKEN=... packer build -var base_snapshot_id=<id> hcloud-microos-k3s-preinstalled.pkr.hcl
+ *   HCLOUD_TOKEN=... packer build -var base_snapshot_id=<x86 id> hcloud-microos-k3s-preinstalled.pkr.hcl
+ *   HCLOUD_TOKEN=... packer build -var arch=arm -var base_snapshot_id=<arm id> hcloud-microos-k3s-preinstalled.pkr.hcl
  *
  * The result is labelled k3s-preinstalled, which is how the module picks the
- * autoscaler image when autoscaler_k3s_preinstalled is set. It also keeps
+ * autoscaler image: autoscaler_k3s_preinstalled for x86 pools,
+ * autoscaler_k3s_preinstalled_arm for cax* pools. It also keeps
  * microos-snapshot=yes, so new static nodes may boot it too; they still run
- * the download path, which is harmless. x86 only: ARM pools keep downloading.
+ * the download path, which is harmless.
  */
 packer {
   required_plugins {
@@ -38,9 +40,19 @@ variable "hcloud_token" {
   sensitive = true
 }
 
+variable "arch" {
+  type        = string
+  default     = "x86"
+  description = "Hetzner image architecture to build: x86 or arm."
+  validation {
+    condition     = contains(["x86", "arm"], var.arch)
+    error_message = "The arch must be x86 or arm."
+  }
+}
+
 variable "base_snapshot_id" {
   type        = string
-  description = "ID of the existing MicroOS x86 snapshot to layer k3s onto."
+  description = "ID of the existing MicroOS snapshot to layer k3s onto; must be of the same arch."
 }
 
 # Keep this matched to the cluster's k3s version. An agent may run older than
@@ -50,10 +62,14 @@ variable "k3s_version" {
   default = "v1.34.11+k3s1"
 }
 
-# sha256 of the k3s binary for k3s_version, from the release's sha256sum-amd64.txt.
+# sha256 of the k3s binary for k3s_version, per arch, from the release's
+# sha256sum-amd64.txt (asset "k3s") and sha256sum-arm64.txt (asset "k3s-arm64").
 variable "k3s_sha256" {
-  type    = string
-  default = "c1991a83985375d318560ac10f2def2fa117995d94d0319d801f283ca074d1b0"
+  type = map(string)
+  default = {
+    x86 = "c1991a83985375d318560ac10f2def2fa117995d94d0319d801f283ca074d1b0"
+    arm = "272f45b9efc69d0bbdb7042156156c6903087829a5003d4593af0ad2d08d76d4"
+  }
 }
 
 # sha256 of install.sh at the k3s_version tag.
@@ -64,32 +80,37 @@ variable "install_sh_sha256" {
 
 locals {
   k3s_tag_url = replace(var.k3s_version, "+", "%2B")
+  # The release asset name, and a small builder of the matching architecture:
+  # a binary for the other arch would fail its own `--version` check below.
+  k3s_asset   = { x86 = "k3s", arm = "k3s-arm64" }[var.arch]
+  server_type = { x86 = "cx23", arm = "cax11" }[var.arch]
+  arch_label  = { x86 = "x86", arm = "ARM" }[var.arch]
 }
 
-source "hcloud" "microos-x86-k3s" {
+source "hcloud" "microos-k3s" {
   image       = var.base_snapshot_id
   location    = "nbg1"
-  server_type = "cx23"
+  server_type = local.server_type
   snapshot_labels = {
     microos-snapshot = "yes"
     creator          = "kube-hetzner"
     k3s-preinstalled = replace(var.k3s_version, "+", "-")
     base-snapshot    = var.base_snapshot_id
   }
-  snapshot_name = "OpenSUSE MicroOS x86 by Kube-Hetzner (k3s ${var.k3s_version})"
+  snapshot_name = "OpenSUSE MicroOS ${local.arch_label} by Kube-Hetzner (k3s ${var.k3s_version})"
   ssh_username  = "root"
   token         = var.hcloud_token
 }
 
 build {
-  sources = ["source.hcloud.microos-x86-k3s"]
+  sources = ["source.hcloud.microos-k3s"]
 
   provisioner "shell" {
     inline = [<<-EOT
       set -eux
       curl -fsSL --retry 5 -o /usr/local/bin/k3s \
-        "https://github.com/k3s-io/k3s/releases/download/${local.k3s_tag_url}/k3s"
-      echo "${var.k3s_sha256}  /usr/local/bin/k3s" | sha256sum -c -
+        "https://github.com/k3s-io/k3s/releases/download/${local.k3s_tag_url}/${local.k3s_asset}"
+      echo "${var.k3s_sha256[var.arch]}  /usr/local/bin/k3s" | sha256sum -c -
       chmod 0755 /usr/local/bin/k3s
       /usr/local/bin/k3s --version
 

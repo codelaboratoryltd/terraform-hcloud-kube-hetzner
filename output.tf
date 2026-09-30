@@ -134,7 +134,7 @@ output "autoscaler_image_x86" {
 }
 
 output "autoscaler_image_arm64" {
-  value       = data.hcloud_image.microos_arm_snapshot.id
+  value       = local.autoscaler_arm_snapshot_id
   description = "MicroOS ARM snapshot ID used by autoscaler nodes."
 }
 
