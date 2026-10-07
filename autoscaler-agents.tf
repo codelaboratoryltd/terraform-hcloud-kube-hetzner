@@ -4,8 +4,11 @@ locals {
     substr(var.autoscaler_nodepools[0].server_type, 0, 3) == "cax" ? local.autoscaler_arm_snapshot_id : local.autoscaler_x86_snapshot_id
   )
 
+  # ARM follows the x86 flag unless overridden.
+  autoscaler_k3s_preinstalled_arm = var.autoscaler_k3s_preinstalled_arm == null ? var.autoscaler_k3s_preinstalled : var.autoscaler_k3s_preinstalled_arm
+
   autoscaler_x86_snapshot_id = var.autoscaler_k3s_preinstalled ? data.hcloud_image.microos_x86_k3s_snapshot[0].id : data.hcloud_image.microos_x86_snapshot.id
-  autoscaler_arm_snapshot_id = var.autoscaler_k3s_preinstalled_arm ? data.hcloud_image.microos_arm_k3s_snapshot[0].id : data.hcloud_image.microos_arm_snapshot.id
+  autoscaler_arm_snapshot_id = local.autoscaler_k3s_preinstalled_arm ? data.hcloud_image.microos_arm_k3s_snapshot[0].id : data.hcloud_image.microos_arm_snapshot.id
 
   # Per pool: does it boot a baked snapshot (and so run the skip-download
   # install)? The image and the install command must agree, or a node either
@@ -13,7 +16,7 @@ locals {
   # its own flag so one arch can switch before the other's snapshot exists.
   autoscaler_pool_k3s_preinstalled = [
     for np in var.autoscaler_nodepools :
-    substr(np.server_type, 0, 3) == "cax" ? var.autoscaler_k3s_preinstalled_arm : var.autoscaler_k3s_preinstalled
+    substr(np.server_type, 0, 3) == "cax" ? local.autoscaler_k3s_preinstalled_arm : var.autoscaler_k3s_preinstalled
   ]
 
   imageList = {

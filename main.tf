@@ -20,12 +20,24 @@ data "hcloud_image" "microos_x86_k3s_snapshot" {
   most_recent       = true
 }
 
-# The ARM counterpart, for autoscaler_k3s_preinstalled_arm (packer -var arch=arm).
+# The ARM counterpart. Both come from one packer run, so they carry the same
+# k3s version; refuse to plan if they don't, rather than let x86 and ARM
+# autoscaled nodes join the cluster on different k3s releases.
 data "hcloud_image" "microos_arm_k3s_snapshot" {
-  count             = var.autoscaler_k3s_preinstalled_arm ? 1 : 0
+  count             = local.autoscaler_k3s_preinstalled_arm ? 1 : 0
   with_selector     = "microos-snapshot=yes,k3s-preinstalled"
   with_architecture = "arm"
   most_recent       = true
+
+  lifecycle {
+    postcondition {
+      condition = (
+        one(data.hcloud_image.microos_x86_k3s_snapshot[*].labels["k3s-preinstalled"]) == null
+        || lookup(self.labels, "k3s-preinstalled", "") == one(data.hcloud_image.microos_x86_k3s_snapshot[*].labels["k3s-preinstalled"])
+      )
+      error_message = "The newest k3s-preinstalled x86 and ARM snapshots carry different k3s versions. Rebuild both with one run of packer-template/hcloud-microos-k3s-preinstalled.pkr.hcl."
+    }
+  }
 }
 
 data "hcloud_image" "microos_arm_snapshot" {

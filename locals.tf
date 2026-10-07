@@ -265,8 +265,8 @@ locals {
   k3s_preinstalled_install_command = "INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_SELINUX_RPM=true INSTALL_K3S_EXEC='%s' sh /opt/k3s/install.sh"
 
   # Each pool picks its variant from local.autoscaler_pool_k3s_preinstalled:
-  # x86 pools follow autoscaler_k3s_preinstalled, ARM (cax*) pools
-  # autoscaler_k3s_preinstalled_arm.
+  # x86 pools follow autoscaler_k3s_preinstalled, ARM (cax*) pools follow it
+  # too unless autoscaler_k3s_preinstalled_arm overrides.
   install_k3s_autoscaler_agent = {
     for preinstalled in [true, false] : tostring(preinstalled) => concat(
       local.common_pre_install_k3s_commands,
