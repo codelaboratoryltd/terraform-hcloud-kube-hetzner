@@ -14,16 +14,18 @@
  * sha256 comes from the same GitHub release, so this is trust-on-first-use,
  * not signature verification.
  *
- * Usage (x86 is the default; pass -var arch=arm for the ARM snapshot):
+ * One run builds BOTH architectures from the same k3s_version, so the x86 and
+ * ARM snapshots cannot drift apart (the module refuses to plan if they do):
  *   HCLOUD_TOKEN=... packer init  hcloud-microos-k3s-preinstalled.pkr.hcl
- *   HCLOUD_TOKEN=... packer build -var base_snapshot_id=<x86 id> hcloud-microos-k3s-preinstalled.pkr.hcl
- *   HCLOUD_TOKEN=... packer build -var arch=arm -var base_snapshot_id=<arm id> hcloud-microos-k3s-preinstalled.pkr.hcl
+ *   HCLOUD_TOKEN=... packer build \
+ *     -var 'base_snapshot_ids={x86="<x86 id>",arm="<arm id>"}' \
+ *     hcloud-microos-k3s-preinstalled.pkr.hcl
+ * Rebuild a single arch only to repair a failed half: -only='*.arm'.
  *
- * The result is labelled k3s-preinstalled, which is how the module picks the
- * autoscaler image: autoscaler_k3s_preinstalled for x86 pools,
- * autoscaler_k3s_preinstalled_arm for cax* pools. It also keeps
- * microos-snapshot=yes, so new static nodes may boot it too; they still run
- * the download path, which is harmless.
+ * Each result is labelled k3s-preinstalled=<version>, which is how the module
+ * picks the autoscaler image when autoscaler_k3s_preinstalled is set. It also
+ * keeps microos-snapshot=yes, so new static nodes may boot it too; they still
+ * run the download path, which is harmless.
  */
 packer {
   required_plugins {
@@ -40,19 +42,13 @@ variable "hcloud_token" {
   sensitive = true
 }
 
-variable "arch" {
-  type        = string
-  default     = "x86"
-  description = "Hetzner image architecture to build: x86 or arm."
+variable "base_snapshot_ids" {
+  type        = map(string)
+  description = "IDs of the existing MicroOS snapshots to layer k3s onto, keyed x86 and arm; each must be of that arch."
   validation {
-    condition     = contains(["x86", "arm"], var.arch)
-    error_message = "The arch must be x86 or arm."
+    condition     = contains(keys(var.base_snapshot_ids), "x86") && contains(keys(var.base_snapshot_ids), "arm")
+    error_message = "The base_snapshot_ids map needs both an x86 and an arm entry."
   }
-}
-
-variable "base_snapshot_id" {
-  type        = string
-  description = "ID of the existing MicroOS snapshot to layer k3s onto; must be of the same arch."
 }
 
 # Keep this matched to the cluster's k3s version. An agent may run older than
@@ -80,37 +76,52 @@ variable "install_sh_sha256" {
 
 locals {
   k3s_tag_url = replace(var.k3s_version, "+", "%2B")
-  # The release asset name, and a small builder of the matching architecture:
-  # a binary for the other arch would fail its own `--version` check below.
-  k3s_asset   = { x86 = "k3s", arm = "k3s-arm64" }[var.arch]
-  server_type = { x86 = "cx23", arm = "cax11" }[var.arch]
-  arch_label  = { x86 = "x86", arm = "ARM" }[var.arch]
+  k3s_label   = replace(var.k3s_version, "+", "-")
+  # Per arch: the release asset, and a small builder of the matching
+  # architecture (a binary for the other arch fails its own `--version` check).
+  k3s_asset = { x86 = "k3s", arm = "k3s-arm64" }
 }
 
+# Settings shared by both architectures; the build block fills in the rest.
 source "hcloud" "microos-k3s" {
-  image       = var.base_snapshot_id
-  location    = "nbg1"
-  server_type = local.server_type
-  snapshot_labels = {
-    microos-snapshot = "yes"
-    creator          = "kube-hetzner"
-    k3s-preinstalled = replace(var.k3s_version, "+", "-")
-    base-snapshot    = var.base_snapshot_id
-  }
-  snapshot_name = "OpenSUSE MicroOS ${local.arch_label} by Kube-Hetzner (k3s ${var.k3s_version})"
-  ssh_username  = "root"
-  token         = var.hcloud_token
+  location     = "nbg1"
+  ssh_username = "root"
+  token        = var.hcloud_token
 }
 
 build {
-  sources = ["source.hcloud.microos-k3s"]
+  source "hcloud.microos-k3s" {
+    name          = "x86"
+    image         = var.base_snapshot_ids["x86"]
+    server_type   = "cx23"
+    snapshot_name = "OpenSUSE MicroOS x86 by Kube-Hetzner (k3s ${var.k3s_version})"
+    snapshot_labels = {
+      microos-snapshot = "yes"
+      creator          = "kube-hetzner"
+      k3s-preinstalled = local.k3s_label
+      base-snapshot    = var.base_snapshot_ids["x86"]
+    }
+  }
+
+  source "hcloud.microos-k3s" {
+    name          = "arm"
+    image         = var.base_snapshot_ids["arm"]
+    server_type   = "cax11"
+    snapshot_name = "OpenSUSE MicroOS ARM by Kube-Hetzner (k3s ${var.k3s_version})"
+    snapshot_labels = {
+      microos-snapshot = "yes"
+      creator          = "kube-hetzner"
+      k3s-preinstalled = local.k3s_label
+      base-snapshot    = var.base_snapshot_ids["arm"]
+    }
+  }
 
   provisioner "shell" {
     inline = [<<-EOT
       set -eux
       curl -fsSL --retry 5 -o /usr/local/bin/k3s \
-        "https://github.com/k3s-io/k3s/releases/download/${local.k3s_tag_url}/${local.k3s_asset}"
-      echo "${var.k3s_sha256[var.arch]}  /usr/local/bin/k3s" | sha256sum -c -
+        "https://github.com/k3s-io/k3s/releases/download/${local.k3s_tag_url}/${local.k3s_asset[source.name]}"
+      echo "${var.k3s_sha256[source.name]}  /usr/local/bin/k3s" | sha256sum -c -
       chmod 0755 /usr/local/bin/k3s
       /usr/local/bin/k3s --version
 
